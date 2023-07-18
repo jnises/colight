@@ -9,10 +9,13 @@ fn main() -> anyhow::Result<()> {
     let stdout = StandardStream::stdout(ColorChoice::Always);
     let mut so = stdout.lock();
     let mut e = DeflateEncoder::new(vec![], Compression::default());
-    let mut text = vec![];
+    let mut text: Vec<u8> = Default::default();
     loop {
         let mut buf = vec![0u8; 1024];
         let size = si.read(&mut buf)?;
+        if size == 0 {
+            break;
+        }
         let data = &buf[..size];
         e.write_all(data)?;
         e.flush()?;
@@ -28,9 +31,10 @@ fn main() -> anyhow::Result<()> {
             text.clear();
         }
     }
+    Ok(())
 }
 
 fn color_map(t: f32) -> Color {
-    let [r, g, b, _] = colorgrad::spectral().at(t.into()).to_rgba8();
+    let [r, g, b, _] = colorgrad::magma().at(t.into()).to_rgba8();
     Color::Rgb(r, g, b)
 }
