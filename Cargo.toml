@@ -8,4 +8,5 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.72"
 colorgrad = "0.6.2"
+flate2 = "1.0.26"
 termcolor = "1.2.0"
