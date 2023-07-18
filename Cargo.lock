@@ -115,6 +115,7 @@ dependencies = [
  "anyhow",
  "colorgrad",
  "flate2",
+ "miniz_oxide",
  "termcolor",
 ]
 

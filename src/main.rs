@@ -12,6 +12,7 @@ fn main() -> anyhow::Result<()> {
     let mut text: Vec<u8> = Default::default();
     loop {
         let mut buf = vec![0u8; 1024];
+        // TODO: read entire lines instead, to avoid having flushing messing things up?
         let size = si.read(&mut buf)?;
         if size == 0 {
             break;
