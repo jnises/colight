@@ -17,18 +17,21 @@ fn main() -> anyhow::Result<()> {
             break;
         }
         let data = &buf[..size];
-        e.write_all(data)?;
-        e.flush()?;
-        text.extend(data.iter());
-        let v = e.get_mut();
-        let len = v.len();
-        // TODO: does this mean that `data` was written, or just that the buffer before `data` was written?
-        if len > 0 {
-            v.clear();
-            let probability = (len as f32 / text.len() as f32).clamp(0.0, 1.0);
-            so.set_color(ColorSpec::new().set_fg(Some(color_map(probability))))?;
-            so.write_all(&text)?;
-            text.clear();
+        // TODO: iterate entire utf8 characters?
+        for &b in data {
+            e.write_all(&[b])?;
+            e.flush()?;
+            text.push(b);
+            let v = e.get_mut();
+            let len = v.len();
+            // TODO: does this mean that `data` was written, or just that the buffer before `data` was written?
+            if len > 0 {
+                v.clear();
+                let probability = (len as f32 / text.len() as f32).clamp(0.0, 1.0);
+                so.set_color(ColorSpec::new().set_fg(Some(color_map(probability))))?;
+                so.write_all(&text)?;
+                text.clear();
+            }
         }
     }
     Ok(())
