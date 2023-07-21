@@ -1,4 +1,4 @@
-use std::io::{Read, Write};
+use std::io::{BufRead, Write};
 
 use flate2::{write::DeflateEncoder, Compression};
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
@@ -9,31 +9,19 @@ fn main() -> anyhow::Result<()> {
     let stdout = StandardStream::stdout(ColorChoice::Always);
     let mut so = stdout.lock();
     let mut e = DeflateEncoder::new(vec![], Compression::default());
-    let mut text: Vec<u8> = Default::default();
+    let mut line = String::new();
     loop {
-        let mut buf = vec![0u8; 1024];
-        // TODO: read entire lines instead, to avoid having flushing messing things up?
-        let size = si.read(&mut buf)?;
-        if size == 0 {
+        line.clear();
+        if si.read_line(&mut line)? == 0 {
             break;
         }
-        let data = &buf[..size];
-        // TODO: iterate entire utf8 characters?
-        for &b in data {
-            e.write_all(&[b])?;
-            e.flush()?;
-            text.push(b);
-            let v = e.get_mut();
-            let len = v.len();
-            // TODO: does this mean that `data` was written, or just that the buffer before `data` was written?
-            if len > 0 {
-                v.clear();
-                let probability = (len as f32 / text.len() as f32).clamp(0.0, 1.0);
-                so.set_color(ColorSpec::new().set_fg(Some(color_map(probability))))?;
-                so.write_all(&text)?;
-                text.clear();
-            }
-        }
+        e.write_all(line.as_bytes())?;
+        e.flush()?;
+        let compression = e.total_out() as f32 / e.total_in() as f32;
+        // TODO: test without this line
+        e.get_mut().clear();
+        so.set_color(ColorSpec::new().set_fg(Some(color_map(compression))))?;
+        so.write_all(line.as_bytes())?;
     }
     Ok(())
 }
