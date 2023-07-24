@@ -1,37 +1,188 @@
-use std::io::{BufRead, Write};
+use std::{cell::RefCell, collections::VecDeque, io::Read};
 
-use flate2::{write::DeflateEncoder, Compression};
+use colorous::COOL;
+use scopeguard::defer;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 fn main() -> anyhow::Result<()> {
     let stdin = std::io::stdin();
-    let mut si = stdin.lock();
-    let stdout = StandardStream::stdout(ColorChoice::Always);
-    let mut so = stdout.lock();
-    let mut e = DeflateEncoder::new(vec![], Compression::default());
-    let mut line = String::new();
-    let mut prev_in = 0;
-    let mut prev_out = 0;
-    loop {
-        line.clear();
-        if si.read_line(&mut line)? == 0 {
-            break;
+    let si = stdin.lock();
+    let stdout = StandardStream::stdout(ColorChoice::Auto);
+    let so = stdout.lock();
+    print_comp(si, so)?;
+    Ok(())
+}
+
+fn print_comp<I, O>(mut si: I, so: O) -> anyhow::Result<()>
+where
+    O: WriteColor,
+    I: Read,
+{
+    // refcell so we can reset on scope exit
+    let soc = RefCell::new(so);
+    defer! {
+        soc.borrow_mut().reset().unwrap();
+    }
+    let pr = |buffered: VecDeque<u8>| -> anyhow::Result<()> {
+        if !buffered.is_empty() {
+            let compression = 1f32 / buffered.len() as f32;
+            let (a, b) = buffered.as_slices();
+            for line in a
+                .split_inclusive(|&c| c == b'\n')
+                .chain(b.split_inclusive(|&c| c == b'\n'))
+            {
+                // set the color at the start of each line as some terminals seem to reset
+                soc.borrow_mut()
+                    .set_color(ColorSpec::new().set_fg(Some(color_map(compression))))?;
+                soc.borrow_mut().write_all(line)?;
+            }
         }
-        e.write_all(line.as_bytes())?;
-        e.flush()?;
-        let line_in = e.total_in() - prev_in;
-        let line_out = e.total_out() - prev_out;
-        prev_in = e.total_in();
-        prev_out = e.total_out();
-        let compression = line_out as f32 / line_in as f32;
-        e.get_mut().clear();
-        so.set_color(ColorSpec::new().set_fg(Some(color_map(compression))))?;
-        so.write_all(line.as_bytes())?;
+        Ok(())
+    };
+    const WINDOW_SIZE: usize = 1024;
+    let mut searcher = WindowSearcher::new(WINDOW_SIZE);
+    loop {
+        let mut byte_buf = [0; 1];
+        if si.read_exact(&mut byte_buf).is_err() {
+            pr(searcher.flush())?;
+            break;
+        };
+        // keep going until we find no more matches
+        match searcher.search(byte_buf[0]) {
+            SearchState::Found => {}
+            SearchState::NotFound { last_found_needle } => {
+                pr(last_found_needle)?;
+            }
+        }
     }
     Ok(())
 }
 
 fn color_map(t: f32) -> Color {
-    let [r, g, b, _] = colorgrad::magma().at(t.into()).to_rgba8();
+    let (r, g, b) = COOL.eval_continuous(t.into()).as_tuple();
     Color::Rgb(r, g, b)
+}
+
+struct WindowSearcher {
+    window_size: usize,
+    haystack: VecDeque<u8>,
+    needle: VecDeque<u8>,
+    matches: Vec<usize>,
+}
+
+#[derive(Debug)]
+enum SearchState {
+    Found,
+    NotFound { last_found_needle: VecDeque<u8> },
+}
+
+impl WindowSearcher {
+    fn new(window_size: usize) -> Self {
+        Self {
+            window_size,
+            haystack: VecDeque::new(),
+            needle: VecDeque::new(),
+            matches: Vec::new(),
+        }
+    }
+
+    fn search(&mut self, next_byte: u8) -> SearchState {
+        if self.needle.is_empty() {
+            self.matches = (0..self.haystack.len())
+                .filter(|&i| self.haystack[i] == next_byte)
+                .collect();
+        } else {
+            self.matches
+                .retain_mut(|i| self.haystack.get(*i + self.needle.len()) == Some(&next_byte));
+        }
+        if self.matches.is_empty() {
+            self.haystack.extend(self.needle.iter());
+            while self.haystack.len() > self.window_size {
+                self.haystack.pop_front();
+            }
+            let last_found_needle = std::mem::take(&mut self.needle);
+            self.matches = (0..self.haystack.len())
+                .filter(|&i| self.haystack[i] == next_byte)
+                .collect();
+            self.needle.push_back(next_byte);
+            SearchState::NotFound { last_found_needle }
+        } else {
+            self.needle.push_back(next_byte);
+            SearchState::Found
+        }
+    }
+
+    fn flush(mut self) -> VecDeque<u8> {
+        std::mem::take(&mut self.needle)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io;
+
+    #[test]
+    fn test_window_searcher() {
+        let mut s = WindowSearcher::new(4);
+        // assert_eq!(s.search(b'a'), false);
+        // assert_eq!(s.search(b'b'), false);
+        // assert_eq!(s.search(b'a'), true);
+        // assert_eq!(s.search(b'b'), true);
+        // assert_eq!(s.search(b'c'), false);
+        // assert_eq!(s.search(b'a'), true);
+    }
+
+    struct NullStdout;
+    impl WriteColor for NullStdout {
+        fn supports_color(&self) -> bool {
+            true
+        }
+        fn set_color(&mut self, _spec: &ColorSpec) -> io::Result<()> {
+            Ok(())
+        }
+        fn reset(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl Write for NullStdout {
+        fn write(&mut self, _buf: &[u8]) -> std::io::Result<usize> {
+            Ok(0)
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn test_print_comp() {
+        let mut s = NullStdout;
+        print_comp(
+            io::Cursor::new(
+                b"[Mon Mar 1 09:19:57 CET 2021]path: 
+[Mon Mar 1 09:19:57 CET 2021]result of plugin in system Library: 0
+[Mon Mar 1 09:19:57 CET 2021]result of plugin in home: 0
+[Mon Mar 1 09:20:01 CET 2021] start new app: /Applications/app.app",
+            ),
+            &mut s,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn test_print_comp2() {
+        let mut s = NullStdout;
+        print_comp(
+            io::Cursor::new(
+                b"ab
+ab
+ab
+ab
+",
+            ),
+            &mut s,
+        )
+        .unwrap();
+    }
 }
