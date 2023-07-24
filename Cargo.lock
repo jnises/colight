@@ -9,13 +9,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b13c32d80ecc7ab747b80c3784bce54ee8a7a0cc4fbda9bf4cda2cf6fe90854"
 
 [[package]]
-name = "colorous"
-version = "1.0.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7eb0838c7c2f4548ff2218bfdcc6ce3d34ffabd0128bfb9eb44cf27de1ec38b3"
-
-[[package]]
-name = "problog"
+name = "colight"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -23,6 +17,12 @@ dependencies = [
  "scopeguard",
  "termcolor",
 ]
+
+[[package]]
+name = "colorous"
+version = "1.0.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7eb0838c7c2f4548ff2218bfdcc6ce3d34ffabd0128bfb9eb44cf27de1ec38b3"
 
 [[package]]
 name = "scopeguard"
