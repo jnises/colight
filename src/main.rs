@@ -49,8 +49,10 @@ where
         };
         // keep going until we find no more matches
         match searcher.search(byte_buf[0]) {
-            SearchState::Found => {}
-            SearchState::NotFound { last_found_needle } => {
+            SearchState::Buffering => {}
+            SearchState::Flushed {
+                buffer: last_found_needle,
+            } => {
                 pr(last_found_needle)?;
             }
         }
@@ -70,10 +72,10 @@ struct WindowSearcher {
     matches: Vec<usize>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 enum SearchState {
-    Found,
-    NotFound { last_found_needle: VecDeque<u8> },
+    Buffering,
+    Flushed { buffer: VecDeque<u8> },
 }
 
 impl WindowSearcher {
@@ -87,29 +89,23 @@ impl WindowSearcher {
     }
 
     fn search(&mut self, next_byte: u8) -> SearchState {
-        if self.needle.is_empty() {
-            self.matches = (0..self.haystack.len())
-                .filter(|&i| self.haystack[i] == next_byte)
-                .collect();
-        } else {
-            self.matches
-                .retain_mut(|i| self.haystack.get(*i + self.needle.len()) == Some(&next_byte));
-        }
-        if self.matches.is_empty() {
+        self.matches
+            .retain_mut(|i| self.haystack.get(*i + self.needle.len()) == Some(&next_byte));
+        let r = if self.matches.is_empty() {
             self.haystack.extend(self.needle.iter());
             while self.haystack.len() > self.window_size {
                 self.haystack.pop_front();
             }
-            let last_found_needle = std::mem::take(&mut self.needle);
+            let buffer = std::mem::take(&mut self.needle);
             self.matches = (0..self.haystack.len())
                 .filter(|&i| self.haystack[i] == next_byte)
                 .collect();
-            self.needle.push_back(next_byte);
-            SearchState::NotFound { last_found_needle }
+            SearchState::Flushed { buffer }
         } else {
-            self.needle.push_back(next_byte);
-            SearchState::Found
-        }
+            SearchState::Buffering
+        };
+        self.needle.push_back(next_byte);
+        r
     }
 
     fn flush(mut self) -> VecDeque<u8> {
@@ -125,12 +121,45 @@ mod tests {
     #[test]
     fn test_window_searcher() {
         let mut s = WindowSearcher::new(4);
-        // assert_eq!(s.search(b'a'), false);
-        // assert_eq!(s.search(b'b'), false);
-        // assert_eq!(s.search(b'a'), true);
-        // assert_eq!(s.search(b'b'), true);
-        // assert_eq!(s.search(b'c'), false);
-        // assert_eq!(s.search(b'a'), true);
+        assert_eq!(
+            s.search(b'a'),
+            SearchState::Flushed {
+                buffer: VecDeque::from(*b"")
+            }
+        );
+        assert_eq!(
+            s.search(b'b'),
+            SearchState::Flushed {
+                buffer: VecDeque::from(*b"a")
+            }
+        );
+        assert_eq!(
+            s.search(b'a'),
+            SearchState::Flushed {
+                buffer: VecDeque::from(*b"b")
+            }
+        );
+        assert_eq!(s.search(b'b'), SearchState::Buffering);
+        assert_eq!(
+            s.search(b'c'),
+            SearchState::Flushed {
+                buffer: VecDeque::from(*b"ab")
+            }
+        );
+        assert_eq!(
+            s.search(b'a'),
+            SearchState::Flushed {
+                buffer: VecDeque::from(*b"c")
+            }
+        );
+        assert_eq!(
+            s.search(b'a'),
+            SearchState::Flushed {
+                buffer: VecDeque::from(*b"a")
+            }
+        );
+        assert_eq!(s.search(b'b'), SearchState::Buffering);
+        assert_eq!(s.flush(), VecDeque::from(*b"ab"));
     }
 
     struct NullStdout;
@@ -146,7 +175,7 @@ mod tests {
         }
     }
 
-    impl Write for NullStdout {
+    impl io::Write for NullStdout {
         fn write(&mut self, _buf: &[u8]) -> std::io::Result<usize> {
             Ok(0)
         }
