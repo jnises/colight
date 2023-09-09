@@ -15,3 +15,10 @@ It only works in some terminals.
 $ cat file | colight
 ```
 
+## Building
+
+Make sure you have rust installed (https://rustup.rs/)
+
+`cargo build -r`
+
+The resulting binary can be found in `target/release/colight`
