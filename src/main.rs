@@ -15,7 +15,7 @@ use crate::{ansi_stripper::AnsiStripReader, window_searcher::{WindowSearcher, Se
 #[command(author, version, about, long_about = None)]
 struct Args {
     /// How long back in history to look for matches
-    #[arg(short, long, default_value_t = 1024)]
+    #[arg(long, default_value_t = 1024)]
     window_size: usize,
 }
 
