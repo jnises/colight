@@ -1,8 +1,16 @@
-use std::{cell::RefCell, collections::VecDeque, io::Read};
+mod ansi_stripper;
+
+use std::{
+    cell::RefCell,
+    collections::VecDeque,
+    io::{Read, Write},
+};
 
 use colorous::COOL;
 use scopeguard::defer;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
+
+use crate::ansi_stripper::AnsiStripReader;
 
 fn main() -> anyhow::Result<()> {
     let stdin = std::io::stdin();
@@ -39,11 +47,12 @@ where
         }
         Ok(())
     };
+    let mut color_stripper = AnsiStripReader::new(si);
     const WINDOW_SIZE: usize = 1024;
     let mut searcher = WindowSearcher::new(WINDOW_SIZE);
     loop {
         let mut byte_buf = [0; 1];
-        if si.read_exact(&mut byte_buf).is_err() {
+        if color_stripper.read_exact(&mut byte_buf).is_err() {
             pr(searcher.flush())?;
             break;
         };
@@ -112,6 +121,7 @@ impl WindowSearcher {
         std::mem::take(&mut self.needle)
     }
 }
+
 
 #[cfg(test)]
 mod tests {
