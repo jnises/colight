@@ -2,22 +2,33 @@ mod ansi_stripper;
 
 use std::{cell::RefCell, collections::VecDeque, io::Read};
 
+use clap::Parser;
 use colorous::COOL;
 use scopeguard::defer;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 use crate::ansi_stripper::AnsiStripReader;
 
+/// Highlight characters in a stream based on how compressible they are
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// How long back in history to look for matches
+    #[arg(short, long, default_value_t = 1024)]
+    window_size: usize,
+}
+
 fn main() -> anyhow::Result<()> {
+    let args = Args::parse();
     let stdin = std::io::stdin();
     let si = stdin.lock();
     let stdout = StandardStream::stdout(ColorChoice::Auto);
     let so = stdout.lock();
-    print_comp(si, so)?;
+    print_comp(si, so, args.window_size)?;
     Ok(())
 }
 
-fn print_comp<I, O>(si: I, so: O) -> anyhow::Result<()>
+fn print_comp<I, O>(si: I, so: O, window_size: usize) -> anyhow::Result<()>
 where
     O: WriteColor,
     I: Read,
@@ -44,8 +55,7 @@ where
         Ok(())
     };
     let mut color_stripper = AnsiStripReader::new(si);
-    const WINDOW_SIZE: usize = 1024;
-    let mut searcher = WindowSearcher::new(WINDOW_SIZE);
+    let mut searcher = WindowSearcher::new(window_size);
     loop {
         let mut byte_buf = [0; 1];
         if color_stripper.read_exact(&mut byte_buf).is_err() {

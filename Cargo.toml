@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.72"
+clap = { version = "4.4.8", features = ["derive"] }
 colorous = "1.0.12"
 scopeguard = "1.2.0"
 strip-ansi-escapes = "0.2.0"
