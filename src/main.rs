@@ -163,6 +163,7 @@ mod tests {
 [Mon Mar 1 09:20:01 CET 2021] start new app: /Applications/app.app",
             ),
             &mut s,
+            1024,
         )
         .unwrap();
     }
@@ -179,6 +180,7 @@ ab
 ",
             ),
             &mut s,
+            1024
         )
         .unwrap();
     }
