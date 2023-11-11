@@ -8,7 +8,10 @@ use colorous::COOL;
 use scopeguard::defer;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
-use crate::{ansi_stripper::AnsiStripReader, window_searcher::{WindowSearcher, SearchState}};
+use crate::{
+    ansi_stripper::AnsiStripReader,
+    window_searcher::{SearchState, WindowSearcher},
+};
 
 /// Highlight characters in a stream based on how compressible they are
 #[derive(Parser, Debug)]
@@ -180,7 +183,7 @@ ab
 ",
             ),
             &mut s,
-            1024
+            1024,
         )
         .unwrap();
     }
