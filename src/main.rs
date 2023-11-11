@@ -1,19 +1,38 @@
+mod ansi_stripper;
+mod window_searcher;
+
 use std::{cell::RefCell, collections::VecDeque, io::Read};
 
+use clap::Parser;
 use colorous::COOL;
 use scopeguard::defer;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
+use crate::{
+    ansi_stripper::AnsiStripReader,
+    window_searcher::{SearchState, WindowSearcher},
+};
+
+/// Highlight characters in a stream based on how compressible they are
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// How long back in history to look for matches
+    #[arg(long, default_value_t = 1024)]
+    window_size: usize,
+}
+
 fn main() -> anyhow::Result<()> {
+    let args = Args::parse();
     let stdin = std::io::stdin();
     let si = stdin.lock();
     let stdout = StandardStream::stdout(ColorChoice::Auto);
     let so = stdout.lock();
-    print_comp(si, so)?;
+    print_comp(si, so, args.window_size)?;
     Ok(())
 }
 
-fn print_comp<I, O>(mut si: I, so: O) -> anyhow::Result<()>
+fn print_comp<I, O>(si: I, so: O, window_size: usize) -> anyhow::Result<()>
 where
     O: WriteColor,
     I: Read,
@@ -39,11 +58,11 @@ where
         }
         Ok(())
     };
-    const WINDOW_SIZE: usize = 1024;
-    let mut searcher = WindowSearcher::new(WINDOW_SIZE);
+    let mut color_stripper = AnsiStripReader::new(si);
+    let mut searcher = WindowSearcher::new(window_size);
     loop {
         let mut byte_buf = [0; 1];
-        if si.read_exact(&mut byte_buf).is_err() {
+        if color_stripper.read_exact(&mut byte_buf).is_err() {
             pr(searcher.flush())?;
             break;
         };
@@ -63,54 +82,6 @@ where
 fn color_map(t: f32) -> Color {
     let (r, g, b) = COOL.eval_continuous(t.into()).as_tuple();
     Color::Rgb(r, g, b)
-}
-
-struct WindowSearcher {
-    window_size: usize,
-    haystack: VecDeque<u8>,
-    needle: VecDeque<u8>,
-    matches: Vec<usize>,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-enum SearchState {
-    Buffering,
-    Flushed { buffer: VecDeque<u8> },
-}
-
-impl WindowSearcher {
-    fn new(window_size: usize) -> Self {
-        Self {
-            window_size,
-            haystack: VecDeque::new(),
-            needle: VecDeque::new(),
-            matches: Vec::new(),
-        }
-    }
-
-    fn search(&mut self, next_byte: u8) -> SearchState {
-        self.matches
-            .retain_mut(|i| self.haystack.get(*i + self.needle.len()) == Some(&next_byte));
-        let r = if self.matches.is_empty() {
-            self.haystack.extend(self.needle.iter());
-            while self.haystack.len() > self.window_size {
-                self.haystack.pop_front();
-            }
-            let buffer = std::mem::take(&mut self.needle);
-            self.matches = (0..self.haystack.len())
-                .filter(|&i| self.haystack[i] == next_byte)
-                .collect();
-            SearchState::Flushed { buffer }
-        } else {
-            SearchState::Buffering
-        };
-        self.needle.push_back(next_byte);
-        r
-    }
-
-    fn flush(mut self) -> VecDeque<u8> {
-        std::mem::take(&mut self.needle)
-    }
 }
 
 #[cfg(test)]
@@ -195,6 +166,7 @@ mod tests {
 [Mon Mar 1 09:20:01 CET 2021] start new app: /Applications/app.app",
             ),
             &mut s,
+            1024,
         )
         .unwrap();
     }
@@ -211,6 +183,7 @@ ab
 ",
             ),
             &mut s,
+            1024,
         )
         .unwrap();
     }
