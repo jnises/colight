@@ -1,10 +1,6 @@
 mod ansi_stripper;
 
-use std::{
-    cell::RefCell,
-    collections::VecDeque,
-    io::{Read, Write},
-};
+use std::{cell::RefCell, collections::VecDeque, io::Read};
 
 use colorous::COOL;
 use scopeguard::defer;
@@ -21,7 +17,7 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn print_comp<I, O>(mut si: I, so: O) -> anyhow::Result<()>
+fn print_comp<I, O>(si: I, so: O) -> anyhow::Result<()>
 where
     O: WriteColor,
     I: Read,
@@ -121,7 +117,6 @@ impl WindowSearcher {
         std::mem::take(&mut self.needle)
     }
 }
-
 
 #[cfg(test)]
 mod tests {
