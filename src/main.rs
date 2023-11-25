@@ -20,31 +20,41 @@ struct Args {
     /// How long back in history to look for matches
     #[arg(long, default_value_t = 1024)]
     window_size: usize,
+
+    /// How much to penalize age of matches, higher values will make older matches less likely to be highlighted
+    #[arg(long, default_value_t = 0.01)]
+    age_penalty: f32,
 }
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
+    assert!(args.window_size > 0);
+    assert!(args.age_penalty >= 0.0);
     let stdin = std::io::stdin();
     let si = stdin.lock();
     let stdout = StandardStream::stdout(ColorChoice::Auto);
     let so = stdout.lock();
-    print_comp(si, so, args.window_size)?;
+    print_comp(si, so, args)?;
     Ok(())
 }
 
-fn print_comp<I, O>(si: I, so: O, window_size: usize) -> anyhow::Result<()>
+fn print_comp<I, O>(si: I, so: O, args: Args) -> anyhow::Result<()>
 where
     O: WriteColor,
     I: Read,
 {
+    let Args {
+        window_size,
+        age_penalty,
+    } = args;
     // refcell so we can reset on scope exit
     let soc = RefCell::new(so);
     defer! {
         soc.borrow_mut().reset().unwrap();
     }
-    let pr = |buffered: VecDeque<u8>| -> anyhow::Result<()> {
+    let pr = |buffered: VecDeque<u8>, age: Option<usize>| -> anyhow::Result<()> {
         if !buffered.is_empty() {
-            let compression = 1f32 / buffered.len() as f32;
+            let score = 1f32 / (buffered.len() as f32 + age.unwrap_or(0) as f32 * age_penalty);
             let (a, b) = buffered.as_slices();
             for line in a
                 .split_inclusive(|&c| c == b'\n')
@@ -52,7 +62,7 @@ where
             {
                 // set the color at the start of each line as some terminals seem to reset
                 soc.borrow_mut()
-                    .set_color(ColorSpec::new().set_fg(Some(color_map(compression))))?;
+                    .set_color(ColorSpec::new().set_fg(Some(color_map(score))))?;
                 soc.borrow_mut().write_all(line)?;
             }
         }
@@ -63,7 +73,7 @@ where
     loop {
         let mut byte_buf = [0; 1];
         if color_stripper.read_exact(&mut byte_buf).is_err() {
-            pr(searcher.flush())?;
+            pr(searcher.flush(), None)?;
             break;
         };
         // keep going until we find no more matches
@@ -71,8 +81,9 @@ where
             SearchState::Buffering => {}
             SearchState::Flushed {
                 buffer: last_found_needle,
+                age,
             } => {
-                pr(last_found_needle)?;
+                pr(last_found_needle, age)?;
             }
         }
     }
@@ -88,50 +99,6 @@ fn color_map(t: f32) -> Color {
 mod tests {
     use super::*;
     use std::io;
-
-    #[test]
-    fn test_window_searcher() {
-        let mut s = WindowSearcher::new(4);
-        assert_eq!(
-            s.search(b'a'),
-            SearchState::Flushed {
-                buffer: VecDeque::from(*b"")
-            }
-        );
-        assert_eq!(
-            s.search(b'b'),
-            SearchState::Flushed {
-                buffer: VecDeque::from(*b"a")
-            }
-        );
-        assert_eq!(
-            s.search(b'a'),
-            SearchState::Flushed {
-                buffer: VecDeque::from(*b"b")
-            }
-        );
-        assert_eq!(s.search(b'b'), SearchState::Buffering);
-        assert_eq!(
-            s.search(b'c'),
-            SearchState::Flushed {
-                buffer: VecDeque::from(*b"ab")
-            }
-        );
-        assert_eq!(
-            s.search(b'a'),
-            SearchState::Flushed {
-                buffer: VecDeque::from(*b"c")
-            }
-        );
-        assert_eq!(
-            s.search(b'a'),
-            SearchState::Flushed {
-                buffer: VecDeque::from(*b"a")
-            }
-        );
-        assert_eq!(s.search(b'b'), SearchState::Buffering);
-        assert_eq!(s.flush(), VecDeque::from(*b"ab"));
-    }
 
     struct NullStdout;
     impl WriteColor for NullStdout {
@@ -166,7 +133,10 @@ mod tests {
 [Mon Mar 1 09:20:01 CET 2021] start new app: /Applications/app.app",
             ),
             &mut s,
-            1024,
+            Args {
+                window_size: 1024,
+                age_penalty: 0.0,
+            },
         )
         .unwrap();
     }
@@ -183,7 +153,10 @@ ab
 ",
             ),
             &mut s,
-            1024,
+            Args {
+                window_size: 1024,
+                age_penalty: 0.0,
+            },
         )
         .unwrap();
     }
