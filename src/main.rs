@@ -18,7 +18,7 @@ use crate::{
 #[command(author, version, about, long_about = None)]
 struct Args {
     /// How long back in history to look for matches.
-    /// 
+    ///
     /// The further back in history a match is found, the lower its compressibility score is.
     #[arg(long, default_value_t = 1024)]
     window_size: usize,
@@ -40,9 +40,7 @@ where
     O: WriteColor,
     I: Read,
 {
-    let Args {
-        window_size,
-    } = args;
+    let Args { window_size } = args;
     // refcell so we can reset on scope exit
     let soc = RefCell::new(so);
     defer! {
@@ -77,10 +75,7 @@ where
         // keep going until we find no more matches
         match searcher.search(byte_buf[0]) {
             SearchState::Buffering => {}
-            SearchState::Flushed {
-                buffer,
-                age,
-            } => {
+            SearchState::Flushed { buffer, age } => {
                 let score = 1.0
                     / 1f32.max(
                         buffer.len() as f32
@@ -136,9 +131,7 @@ mod tests {
 [Mon Mar 1 09:20:01 CET 2021] start new app: /Applications/app.app",
             ),
             &mut s,
-            Args {
-                window_size: 1024,
-            },
+            Args { window_size: 1024 },
         )
         .unwrap();
     }
@@ -155,9 +148,7 @@ ab
 ",
             ),
             &mut s,
-            Args {
-                window_size: 1024,
-            },
+            Args { window_size: 1024 },
         )
         .unwrap();
     }
