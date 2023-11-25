@@ -3,11 +3,11 @@ Colight
 
 ![screenshot](docs/screenshot.webp)
 
-Command line utility that colors text based on how compressible it is.
+Command line utility that highlights text based on how compressible it is.
 Compressibility is determined using a lz77-like algorithm.
 The idea is that compressibility is a good indicator of whether a piece of text is interesting or not.
 
-It only works in some terminals.
+It only works in true-color terminals.
 
 ## Usage
 
