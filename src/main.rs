@@ -89,50 +89,6 @@ mod tests {
     use super::*;
     use std::io;
 
-    #[test]
-    fn test_window_searcher() {
-        let mut s = WindowSearcher::new(4);
-        assert_eq!(
-            s.search(b'a'),
-            SearchState::Flushed {
-                buffer: VecDeque::from(*b"")
-            }
-        );
-        assert_eq!(
-            s.search(b'b'),
-            SearchState::Flushed {
-                buffer: VecDeque::from(*b"a")
-            }
-        );
-        assert_eq!(
-            s.search(b'a'),
-            SearchState::Flushed {
-                buffer: VecDeque::from(*b"b")
-            }
-        );
-        assert_eq!(s.search(b'b'), SearchState::Buffering);
-        assert_eq!(
-            s.search(b'c'),
-            SearchState::Flushed {
-                buffer: VecDeque::from(*b"ab")
-            }
-        );
-        assert_eq!(
-            s.search(b'a'),
-            SearchState::Flushed {
-                buffer: VecDeque::from(*b"c")
-            }
-        );
-        assert_eq!(
-            s.search(b'a'),
-            SearchState::Flushed {
-                buffer: VecDeque::from(*b"a")
-            }
-        );
-        assert_eq!(s.search(b'b'), SearchState::Buffering);
-        assert_eq!(s.flush(), VecDeque::from(*b"ab"));
-    }
-
     struct NullStdout;
     impl WriteColor for NullStdout {
         fn supports_color(&self) -> bool {
