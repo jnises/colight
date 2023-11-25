@@ -48,7 +48,7 @@ where
     }
     let pr = |buffered: VecDeque<u8>, score: f32| -> anyhow::Result<()> {
         // score of 1 means buffered is uncompressible, 0 means it is fully compressible
-        debug_assert!(score >= 0.0 && score <= 1.0);
+        debug_assert!((0.0..=1.0).contains(&score));
         if !buffered.is_empty() {
             //let score = 1f32 / (buffered.len() as f32 + age.unwrap_or(0) as f32 * age_penalty);
             let (a, b) = buffered.as_slices();
