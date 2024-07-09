@@ -15,6 +15,12 @@ It only works in true-color terminals.
 $ cat file | colight
 ```
 
+## Installing from source
+
+```bash
+cargo install --git https://github.com/jnises/colight
+```
+
 ## Building
 
 Make sure you have rust installed (https://rustup.rs/)
